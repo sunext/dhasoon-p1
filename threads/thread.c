@@ -226,7 +226,7 @@ thread_create (const char *name, int priority,
 	sf->ebp = 0;
 
 	/* Add to run queue. */
-	thread_unblock (t);
+        thread_unblock (t);
 
 	enum intr_level old_level = intr_disable ();
 	check_thread_priority();
@@ -679,23 +679,16 @@ check_thread_priority (void)
 	struct thread *t = list_entry(list_front(&ready_list),
 			struct thread, elem);
 
-	if (intr_context())
-	{
-		thread_ticks++;
-		if ( thread_current()->priority < t->priority ||
-				(++thread_ticks >= TIME_SLICE &&
-						thread_current()->priority == t->priority) )
+	thread_ticks++;
+	if ( thread_current()->priority < t->priority ||
+		(thread_ticks >= TIME_SLICE && thread_current()->priority == t->priority)) {
+		if (intr_context())
 		{
 			intr_yield_on_return();
+		} else {
+			thread_yield();
 		}
-		return;
 	}
-
-//	if (thread_current()->priority < t->priority)
-//	{
-//		thread_yield();
-//	}
-
 }
 
 
