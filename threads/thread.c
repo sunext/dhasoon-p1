@@ -14,7 +14,7 @@
 #ifdef USERPROG
 #include "userprog/process.h"
 #endif
-// iske neeche ka line nikaala
+
 /* Random value for struct thread's `magic' member.
    Used to detect stack overflow.  See the big comment at the top
    of thread.h for details. */
@@ -157,8 +157,8 @@ thread_tick (void)
 	check_thread_priority(); // Tests if thread still has max priority
 
 	/* Enforce preemption. */
-	if (++thread_ticks >= TIME_SLICE)
-		intr_yield_on_return ();
+	//	if (++thread_ticks >= TIME_SLICE)
+	//		intr_yield_on_return ();
 
 
 
@@ -226,6 +226,10 @@ thread_create (const char *name, int priority,
 
 	/* Add to run queue. */
 	thread_unblock (t);
+
+	enum intr_level old_level = intr_disable ();
+	check_thread_priority();
+	intr_set_level (old_level);
 
 	return tid;
 }
