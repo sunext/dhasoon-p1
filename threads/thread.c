@@ -154,8 +154,9 @@ thread_tick (void)
 		e = list_begin(&sleep_list);
 	}
 
-	check_thread_priority(); // Tests if thread still has max priority
+	check_thread_priority(); // Test for thread max priority (alarm-priority test)
 
+	//moved this part of code to check_thread_priority
 	/* Enforce preemption. */
 	//	if (++thread_ticks >= TIME_SLICE)
 	//		intr_yield_on_return ();
@@ -266,9 +267,11 @@ thread_unblock (struct thread *t)
 
 	enum intr_level old_level  = intr_disable ();
 
-	list_insert_ordered(&ready_list, &t->elem,
-			(list_less_func *) &has_bigger_priority,
-			NULL);
+//	list_insert_ordered(&ready_list, &t->elem,
+//			(list_less_func *) &has_bigger_priority,
+//			NULL);
+
+	list_push_back(&ready_list, &t->elem);
 
 	t->status = THREAD_READY;
 
@@ -291,6 +294,7 @@ thread_wakeup (struct thread *t)
 	list_insert_ordered(&ready_list, &t->elem,
 			(list_less_func *) &has_bigger_priority,
 			NULL);
+//	list_push_back(&ready_list, &t->elem);
 
 	t->status = THREAD_READY;
 
@@ -663,6 +667,7 @@ bool has_bigger_priority (const struct list_elem *a,
 }
 
 
+
 void
 check_thread_priority (void)
 {
@@ -678,7 +683,7 @@ check_thread_priority (void)
 	{
 		thread_ticks++;
 		if ( thread_current()->priority < t->priority ||
-				(thread_ticks >= TIME_SLICE &&
+				(++thread_ticks >= TIME_SLICE &&
 						thread_current()->priority == t->priority) )
 		{
 			intr_yield_on_return();
@@ -686,10 +691,11 @@ check_thread_priority (void)
 		return;
 	}
 
-	if (thread_current()->priority < t->priority)
-	{
-		thread_yield();
-	}
+//	if (thread_current()->priority < t->priority)
+//	{
+//		thread_yield();
+//	}
+
 }
 
 
