@@ -88,7 +88,13 @@ struct thread
     enum thread_status status;          /* Thread state. */
     char name[16];                      /* Name (for debugging purposes). */
     uint8_t *stack;                     /* Saved stack pointer. */
-    int priority;                       /* Priority. */
+    int priority;                       /* Has the current priority of the thread. */
+    int actual_priority;				/* Priority before donation.
+    This must be returned back to priority variable after donation task is complete */
+
+    struct lock *required_lock;			/* Lock which is required by this thread
+    (in case it is waiting for it to be released) */
+
     struct list_elem allelem;           /* List element for all threads list. */
 
     /* Shared between thread.c and synch.c. */
@@ -158,7 +164,7 @@ void check_thread_priority (void);
 
 void thread_sleep(int64_t ticks);
 void thread_wakeup (struct thread *t);
-
+/*void insert_into_ready_list(struct thread *t);*/
 
 #endif /* threads/thread.h */
 

@@ -60,20 +60,54 @@ sema_init (struct semaphore *sema, unsigned value)
 void
 sema_down (struct semaphore *sema) 
 {
-  enum intr_level old_level;
+  struct thread *current_thread;
+  struct lock *contention_lock;
 
   ASSERT (sema != NULL);
   ASSERT (!intr_context ());
 
-  old_level = intr_disable ();
-  while (sema->value == 0) 
-    {
-      list_push_back (&sema->waiters, &thread_current ()->elem);
-      thread_block ();
-    }
+  enum intr_level old_level = intr_disable ();
+  current_thread = thread_current();
+  contention_lock = current_thread->required_lock;
+
+  while (sema->value == 0)
+  {
+	  //TODO:
+	  //need  to check if the current thread requires priority donation ?
+	  //keep donating priority till there is no lock
+
+	  // printf("inside sema_down function ::: name==> %s \n" , current_thread->name);
+	  while(contention_lock != NULL){
+		  if(contention_lock->holder != NULL &&
+				  contention_lock->holder->priority < current_thread->priority){
+
+			  //donate the priority to lock holder
+			  contention_lock->holder->priority = current_thread->priority;
+
+			  //switch to thread that has the lock
+			  current_thread = contention_lock->holder;
+
+			  //switch to new lock if we have one
+			  contention_lock = current_thread->required_lock;
+
+			  //printf("inside contention_lock while loop ::: name==> %s \n" , current_thread->name);
+		  }
+		  break;
+	  }
+
+	  //TODO:
+	  //insert in the priority ordered fashion
+	  //list_push_back (&sema->waiters, &thread_current ()->elem);
+	  list_insert_ordered(&sema->waiters, &thread_current ()->elem,
+			  (list_less_func *) &has_bigger_priority, NULL);
+
+	  thread_block ();
+  }
+
   sema->value--;
   intr_set_level (old_level);
 }
+
 
 /* Down or "P" operation on a semaphore, but only if the
    semaphore is not already 0.  Returns true if the semaphore is
@@ -113,12 +147,23 @@ sema_up (struct semaphore *sema)
   ASSERT (sema != NULL);
 
   old_level = intr_disable ();
-  if (!list_empty (&sema->waiters)) 
-    thread_unblock (list_entry (list_pop_front (&sema->waiters),
-                                struct thread, elem));
+  if (!list_empty (&sema->waiters)){
+//	  struct thread *t = list_entry (list_front(&sema->waiters), struct thread, elem);
+//	  printf("sema list head tread is ::  %s -- %d --- %d \n" ,t->name, t->priority, t->actual_priority);
+
+	  thread_unblock (list_entry (list_pop_front (&sema->waiters),
+			  struct thread, elem));
+  }
+
   sema->value++;
+
+  //before changing the interrupt guard, check is we have correct priority of threads to run
+  //this fixed main running all the time before waiters.(test : priority-donate-one)
+  check_thread_priority();
+
   intr_set_level (old_level);
 }
+
 
 static void sema_test_helper (void *sema_);
 
@@ -196,8 +241,18 @@ lock_acquire (struct lock *lock)
   ASSERT (!intr_context ());
   ASSERT (!lock_held_by_current_thread (lock));
 
+  enum intr_level old_level = intr_disable();
+
+  //set the required lock for the thread, just to remember that we need it.
+  //this required_lock value will be used to check later while donating
+  if (lock->holder != NULL){
+	 thread_current()->required_lock = lock;
+  }
+
   sema_down (&lock->semaphore);
   lock->holder = thread_current ();
+
+  intr_set_level(old_level);
 }
 
 /* Tries to acquires LOCK and returns true if successful or false
@@ -231,9 +286,42 @@ lock_release (struct lock *lock)
   ASSERT (lock != NULL);
   ASSERT (lock_held_by_current_thread (lock));
 
+  enum intr_level old_level = intr_disable();
+  struct thread *current_thread = thread_current();
+
   lock->holder = NULL;
+  current_thread->required_lock = NULL;
+
+  //TODO:
+  struct semaphore *semap = &lock->semaphore;
+  struct list *waiterList = &semap->waiters;
+  struct thread *t;
+  struct list_elem *e;
+
+  //TODO:
+  //and also check the semaphore waiting list,
+  //if there are any waiting threads then change the priority of current thread appropraitely
+  //but first check if the list is not empty.
+  if(!list_empty(waiterList)){
+
+	  e = list_front(waiterList);
+	  t = list_entry (e, struct thread, elem);
+
+	  //	  printf("current thread ::  %s -- %d --- %d \n" ,current_thread->name, current_thread->priority, current_thread->actual_priority);
+	  //	  printf("next thread to run ::  %s -- %d --- %d \n" ,t->name, t->priority, t->actual_priority);
+
+	  if(t->priority >= current_thread->actual_priority){
+		  //		  printf("changed priority of running thread...\n");
+		  current_thread->priority = current_thread->actual_priority;
+		  //		  printf("current thread ::  %s -- %d --- %d \n" ,current_thread->name, current_thread->priority, current_thread->actual_priority);
+	  }
+  }
+
   sema_up (&lock->semaphore);
+  intr_set_level (old_level);
+
 }
+
 
 /* Returns true if the current thread holds LOCK, false
    otherwise.  (Note that testing whether some other thread holds
