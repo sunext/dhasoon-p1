@@ -78,8 +78,9 @@ sema_down (struct semaphore *sema)
 
 	  // printf("inside sema_down function ::: name==> %s \n" , current_thread->name);
 	  while(contention_lock != NULL){
-		  if(contention_lock->holder != NULL &&
-				  contention_lock->holder->priority < current_thread->priority){
+		  if(contention_lock->holder != NULL
+				  //&& contention_lock->holder->priority < current_thread->priority
+				  ){
 
 			  //donate the priority to lock holder
 			  contention_lock->holder->priority = current_thread->priority;
@@ -87,8 +88,8 @@ sema_down (struct semaphore *sema)
 			  //switch to thread that has the lock
 			  current_thread = contention_lock->holder;
 
-			  //switch to new lock if we have one
-			  contention_lock = current_thread->required_lock;
+/*			  //switch to new lock if we have one
+			  contention_lock = current_thread->required_lock;*/
 
 			  //printf("inside contention_lock while loop ::: name==> %s \n" , current_thread->name);
 		  }
@@ -290,7 +291,7 @@ lock_release (struct lock *lock)
   struct thread *current_thread = thread_current();
 
   lock->holder = NULL;
-  current_thread->required_lock = NULL;
+//  current_thread->required_lock = NULL;
 
   //TODO:
   struct semaphore *semap = &lock->semaphore;
