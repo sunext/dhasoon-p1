@@ -470,6 +470,7 @@ static unsigned thread_ticks; /* # of timer ticks since last yield. */
 	 t->stack = (uint8_t *) t + PGSIZE;
 	 t->priority = priority;
 	 t->actual_priority = priority;
+	 list_init(&t->received_piorities);
 	 t->required_lock = NULL;
 	 t->magic = THREAD_MAGIC;
 
