@@ -101,6 +101,7 @@ struct thread
     struct list_elem elem;              /* List element. */
 
     struct list received_piorities;
+    struct list_elem recieved_priorities_elem;
 
 #ifdef USERPROG
     /* Owned by userprog/process.c. */

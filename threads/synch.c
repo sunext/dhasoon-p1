@@ -74,11 +74,12 @@ void sema_down(struct semaphore *sema) {
 		// printf("inside sema_down function ::: name==> %s \n" , current_thread->name);
 		while (contention_lock != NULL) {
 			if (contention_lock->holder != NULL
-			//&& contention_lock->holder->priority < current_thread->priority
+			&& contention_lock->holder->priority < current_thread->priority
 			) {
 
 				//
-				list_push_front(&contention_lock->holder->received_piorities, &current_thread->elem);
+//				list_push_front(&contention_lock->holder->received_piorities, &current_thread->recieved_priorities_elem);
+
 
 				//donate the priority to lock holder
 				contention_lock->holder->priority = current_thread->priority;
@@ -86,12 +87,13 @@ void sema_down(struct semaphore *sema) {
 				//switch to thread that has the lock
 				current_thread = contention_lock->holder;
 
-				/*			  //switch to new lock if we have one
-				 contention_lock = current_thread->required_lock;*/
+				//switch to new lock if we have one
+//				 contention_lock = current_thread->required_lock;
 
 				//printf("inside contention_lock while loop ::: name==> %s \n" , current_thread->name);
 			}
-			break;
+			contention_lock = current_thread->required_lock;
+//			break;
 		}
 
 		//TODO:
@@ -228,6 +230,10 @@ void lock_acquire(struct lock *lock) {
 	//this required_lock value will be used to check later while donating
 	if (lock->holder != NULL) {
 		thread_current()->required_lock = lock;
+
+		list_insert_ordered(&lock->holder->received_piorities,
+				&thread_current()->recieved_priorities_elem,
+				&has_bigger_priority, NULL);
 	}
 
 	sema_down(&lock->semaphore);
@@ -298,9 +304,9 @@ void lock_release(struct lock *lock) {
 	if (!list_empty(&current_thread->received_piorities) && list_size(&current_thread->received_piorities) >1) {
 		struct list_elem *current_elem = list_begin(&current_thread->received_piorities);
 		while(current_elem != list_end(&current_thread->received_piorities)){
-			struct thread *loop_thread = list_entry(current_elem, struct thread, elem);
+			struct thread *loop_thread = list_entry(current_elem, struct thread, recieved_priorities_elem);
 			if(&loop_thread->required_lock== lock){
-				struct thread *next_thread = list_entry(list_next(current_elem), struct thread, elem);
+				struct thread *next_thread = list_entry(list_next(current_elem), struct thread, recieved_priorities_elem);
 				priority_to_be_updated = next_thread->priority;
 				break;
 			}
