@@ -74,11 +74,11 @@ void sema_down(struct semaphore *sema) {
 		// printf("inside sema_down function ::: name==> %s \n" , current_thread->name);
 		while (contention_lock != NULL) {
 			if (contention_lock->holder != NULL
-			&& contention_lock->holder->priority < current_thread->priority
+			//&& contention_lock->holder->priority < current_thread->priority
 			) {
 
 				//
-//				list_push_front(&contention_lock->holder->received_piorities, &current_thread->recieved_priorities_elem);
+				list_push_front(&contention_lock->holder->received_piorities, &current_thread->recieved_priorities_elem);
 
 
 				//donate the priority to lock holder
@@ -230,10 +230,6 @@ void lock_acquire(struct lock *lock) {
 	//this required_lock value will be used to check later while donating
 	if (lock->holder != NULL) {
 		thread_current()->required_lock = lock;
-
-		list_insert_ordered(&lock->holder->received_piorities,
-				&thread_current()->recieved_priorities_elem,
-				&has_bigger_priority, NULL);
 	}
 
 	sema_down(&lock->semaphore);
