@@ -83,6 +83,7 @@ void sema_down(struct semaphore *sema) {
 
 				//donate the priority to lock holder
 				contention_lock->holder->priority = current_thread->priority;
+				//current_thread->priority = contention_lock->holder->actual_priority;
 
 				//switch to thread that has the lock
 				current_thread = contention_lock->holder;
@@ -295,26 +296,26 @@ void lock_release(struct lock *lock) {
 		}
 	}*/
 
-	int priority_to_be_updated;
-
 	if (!list_empty(&current_thread->received_piorities) && list_size(&current_thread->received_piorities) >1) {
 		struct list_elem *current_elem = list_begin(&current_thread->received_piorities);
 		while(current_elem != list_end(&current_thread->received_piorities)){
 			struct thread *loop_thread = list_entry(current_elem, struct thread, recieved_priorities_elem);
-			if(&loop_thread->required_lock== lock){
+			if(loop_thread->required_lock == lock){
 				struct thread *next_thread = list_entry(list_next(current_elem), struct thread, recieved_priorities_elem);
-				priority_to_be_updated = next_thread->priority;
+				current_thread->priority = next_thread->priority;
+				list_remove_anywhere(&current_thread->received_piorities, current_elem);
 				break;
 			}
 			current_elem = list_next(current_elem);
 		}
-		current_thread->priority = priority_to_be_updated;
-		list_remove(current_elem);
 	}
 	else if(!list_empty(&current_thread->received_piorities) && list_size(&current_thread->received_piorities) == 1){
-		priority_to_be_updated = current_thread->actual_priority;
-		list_init(&current_thread->received_piorities);
-		current_thread->priority = priority_to_be_updated;
+		struct list_elem *current_elem = list_begin(&current_thread->received_piorities);
+		struct thread *loop_thread = list_entry(current_elem, struct thread, recieved_priorities_elem);
+		if(loop_thread->required_lock == lock){
+			list_init(&current_thread->received_piorities);
+			current_thread->priority = current_thread->actual_priority;
+		}
 	}
 
 
