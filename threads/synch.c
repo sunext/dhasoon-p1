@@ -80,9 +80,7 @@ void sema_down(struct semaphore *sema) {
 			contention_lock = current_thread->required_lock;
 		}
 
-		//TODO:
 		//insert in the priority ordered fashion
-		//list_push_back (&sema->waiters, &thread_current ()->elem);
 		list_insert_ordered(&sema->waiters, &thread_current()->elem, &has_bigger_priority, NULL);
 
 		thread_block();
@@ -242,10 +240,8 @@ bool lock_try_acquire(struct lock *lock) {
 
 	success = sema_try_down(&lock->semaphore);
 	if (success)
-
-		//TODO
-//		thread_current()->required_lock = NULL;
 		lock->holder = thread_current();
+
 	return success;
 }
 
@@ -294,9 +290,6 @@ void lock_release(struct lock *lock) {
 
 	lock->holder = NULL;
 
-	//TODO
-//	list_sort(&sema->waiters, &has_bigger_priority,NULL);
-
 	sema_up(&lock->semaphore);
 	intr_set_level(old_level);
 
@@ -317,6 +310,7 @@ bool lock_held_by_current_thread(
 struct semaphore_elem {
 	struct list_elem elem; /* List element. */
 	struct semaphore semaphore; /* This semaphore. */
+	struct thread *thread; /* This thread */
 };
 
 /* Initializes condition variable COND.  A condition variable
@@ -326,6 +320,21 @@ void cond_init(struct condition *cond) {
 	ASSERT(cond != NULL);
 
 	list_init(&cond->waiters);
+}
+
+//TODO - change the name
+/**
+ * Comparator method which returns true if the element a has a higher priority than element b
+ *
+ */
+bool has_bigger_semaphore_elem_priority(const struct list_elem *a, const struct list_elem *b,
+		 void *aux UNUSED) {
+	 struct semaphore_elem *sa = list_entry(a, struct semaphore_elem, elem);
+	 struct semaphore_elem *sb = list_entry(b, struct semaphore_elem, elem);
+	 struct thread *ta = sa->thread;
+	 struct thread *tb = sb->thread;
+
+	 return (ta->priority > tb->priority) ? true : false;
 }
 
 /* Atomically releases LOCK and waits for COND to be signaled by
@@ -357,8 +366,8 @@ void cond_wait(struct condition *cond, struct lock *lock) {
 	ASSERT(lock_held_by_current_thread (lock));
 
 	sema_init(&waiter.semaphore, 0);
-//	list_push_back(&cond->waiters, &waiter.elem);
-	list_insert_ordered(&cond->waiters,  &waiter.elem, &has_bigger_priority, NULL);
+	waiter.thread = lock->holder;
+	list_insert_ordered(&cond->waiters,  &waiter.elem, &has_bigger_semaphore_elem_priority, NULL);
 	lock_release(lock);
 	sema_down(&waiter.semaphore);
 	lock_acquire(lock);
@@ -377,12 +386,10 @@ void cond_signal(struct condition *cond, struct lock *lock UNUSED) {
 	ASSERT(!intr_context ());
 	ASSERT(lock_held_by_current_thread (lock));
 
-	if (!list_empty(&cond->waiters))
+	if (!list_empty(&cond->waiters)){
 
-		list_sort(&cond->waiters, &has_bigger_priority, NULL);
-		struct thread * test_thread = list_entry (list_front(&cond->waiters), struct thread, elem);
-		printf("thread name : %s" , test_thread->name);
 		sema_up(&list_entry (list_pop_front (&cond->waiters),struct semaphore_elem, elem)->semaphore);
+	}
 
 
 }
