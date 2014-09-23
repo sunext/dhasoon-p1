@@ -67,40 +67,23 @@ void sema_down(struct semaphore *sema) {
 	contention_lock = current_thread->required_lock;
 
 	while (sema->value == 0) {
-		//TODO:
 		//need  to check if the current thread requires priority donation ?
 		//keep donating priority till there is no lock
-
-		// printf("inside sema_down function ::: name==> %s \n" , current_thread->name);
 		while (contention_lock != NULL) {
-			if (contention_lock->holder != NULL
-			//&& contention_lock->holder->priority < current_thread->priority
-			) {
-
-				//
-				list_push_front(&contention_lock->holder->received_piorities, &current_thread->recieved_priorities_elem);
-
+			if (contention_lock->holder != NULL) {
 
 				//donate the priority to lock holder
 				contention_lock->holder->priority = current_thread->priority;
 
-				//switch to thread that has the lock
 				current_thread = contention_lock->holder;
-
-				//switch to new lock if we have one
-//				 contention_lock = current_thread->required_lock;
-
-				//printf("inside contention_lock while loop ::: name==> %s \n" , current_thread->name);
 			}
 			contention_lock = current_thread->required_lock;
-//			break;
 		}
 
 		//TODO:
 		//insert in the priority ordered fashion
 		//list_push_back (&sema->waiters, &thread_current ()->elem);
-		list_insert_ordered(&sema->waiters, &thread_current()->elem,
-				(list_less_func *) &has_bigger_priority, NULL);
+		list_insert_ordered(&sema->waiters, &thread_current()->elem, &has_bigger_priority, NULL);
 
 		thread_block();
 	}
@@ -113,7 +96,8 @@ void sema_down(struct semaphore *sema) {
  semaphore is not already 0.  Returns true if the semaphore is
  decremented, false otherwise.
 
- This function may be called from an interrupt handler. */bool sema_try_down(
+ This function may be called from an interrupt handler. */
+bool sema_try_down(
 		struct semaphore *sema) {
 	enum intr_level old_level;
 	bool success;
@@ -142,8 +126,9 @@ void sema_up(struct semaphore *sema) {
 
 	old_level = intr_disable();
 	if (!list_empty(&sema->waiters)) {
-//	  struct thread *t = list_entry (list_front(&sema->waiters), struct thread, elem);
-//	  printf("sema list head tread is ::  %s -- %d --- %d \n" ,t->name, t->priority, t->actual_priority);
+
+		//TODO
+		list_sort(&sema->waiters, &has_bigger_priority,NULL);
 
 		thread_unblock(list_entry (list_pop_front (&sema->waiters),
 				struct thread, elem));
@@ -230,6 +215,11 @@ void lock_acquire(struct lock *lock) {
 	//this required_lock value will be used to check later while donating
 	if (lock->holder != NULL) {
 		thread_current()->required_lock = lock;
+
+		//TODO
+		list_insert_ordered(&lock->holder->received_piorities,
+				&thread_current()->recieved_priorities_elem,
+				&has_bigger_priority, NULL);
 	}
 
 	sema_down(&lock->semaphore);
@@ -243,7 +233,8 @@ void lock_acquire(struct lock *lock) {
  thread.
 
  This function will not sleep, so it may be called within an
- interrupt handler. */bool lock_try_acquire(struct lock *lock) {
+ interrupt handler. */
+bool lock_try_acquire(struct lock *lock) {
 	bool success;
 
 	ASSERT(lock != NULL);
@@ -251,6 +242,9 @@ void lock_acquire(struct lock *lock) {
 
 	success = sema_try_down(&lock->semaphore);
 	if (success)
+
+		//TODO
+//		thread_current()->required_lock = NULL;
 		lock->holder = thread_current();
 	return success;
 }
@@ -266,59 +260,42 @@ void lock_release(struct lock *lock) {
 
 	enum intr_level old_level = intr_disable();
 	struct thread *current_thread = thread_current();
+	struct semaphore *sema = &lock->semaphore;
 
+	struct list_elem *current_elem = list_begin(&current_thread->received_piorities);
+	struct list_elem *to_be_deleted_elem;
 
-//  current_thread->required_lock = NULL;
+	current_thread->priority = current_thread->actual_priority;
 
-	//TODO:
-	/*struct semaphore *semap = &lock->semaphore;
-	struct list *waiterList = &semap->waiters;
-	struct thread *t;
-	struct list_elem *e;
-
-	//TODO:
-	//and also check the semaphore waiting list,
-	//if there are any waiting threads then change the priority of current thread appropraitely
-	//but first check if the list is not empty.
-	if (!list_empty(waiterList)) {
-
-		e = list_front(waiterList);
-		t = list_entry (e, struct thread, elem);
-
-		//	  printf("current thread ::  %s -- %d --- %d \n" ,current_thread->name, current_thread->priority, current_thread->actual_priority);
-		//	  printf("next thread to run ::  %s -- %d --- %d \n" ,t->name, t->priority, t->actual_priority);
-
-		if (t->priority >= current_thread->actual_priority) {
-			//		  printf("changed priority of running thread...\n");
-			current_thread->priority = current_thread->actual_priority;
-			//		  printf("current thread ::  %s -- %d --- %d \n" ,current_thread->name, current_thread->priority, current_thread->actual_priority);
-		}
-	}*/
-
-	int priority_to_be_updated;
-
-	if (!list_empty(&current_thread->received_piorities) && list_size(&current_thread->received_piorities) >1) {
-		struct list_elem *current_elem = list_begin(&current_thread->received_piorities);
-		while(current_elem != list_end(&current_thread->received_piorities)){
+	if (!list_empty(&current_thread->received_piorities)) {
+		while( current_elem != list_end(&current_thread->received_piorities)){
 			struct thread *loop_thread = list_entry(current_elem, struct thread, recieved_priorities_elem);
-			if(&loop_thread->required_lock== lock){
-				struct thread *next_thread = list_entry(list_next(current_elem), struct thread, recieved_priorities_elem);
-				priority_to_be_updated = next_thread->priority;
+			if(loop_thread->required_lock== lock){
+				to_be_deleted_elem = current_elem;
+				current_elem = list_next(current_elem);
+				list_remove(to_be_deleted_elem);
+			}
+			else{
 				break;
 			}
-			current_elem = list_next(current_elem);
 		}
-		current_thread->priority = priority_to_be_updated;
-		list_remove(current_elem);
-	}
-	else if(!list_empty(&current_thread->received_piorities) && list_size(&current_thread->received_piorities) == 1){
-		priority_to_be_updated = current_thread->actual_priority;
-		list_init(&current_thread->received_piorities);
-		current_thread->priority = priority_to_be_updated;
-	}
 
+		if (!list_empty(&current_thread->received_piorities)) {
+			struct thread *head_of_received_piorities =
+					list_entry(list_front(&current_thread->received_piorities),struct thread, recieved_priorities_elem);
+
+			if (head_of_received_piorities->priority > current_thread->actual_priority){
+				current_thread->priority = head_of_received_piorities->priority;
+			}
+
+		}
+
+	}
 
 	lock->holder = NULL;
+
+	//TODO
+//	list_sort(&sema->waiters, &has_bigger_priority,NULL);
 
 	sema_up(&lock->semaphore);
 	intr_set_level(old_level);
@@ -328,7 +305,8 @@ void lock_release(struct lock *lock) {
 
 /* Returns true if the current thread holds LOCK, false
  otherwise.  (Note that testing whether some other thread holds
- a lock would be racy.) */bool lock_held_by_current_thread(
+ a lock would be racy.) */
+bool lock_held_by_current_thread(
 		const struct lock *lock) {
 	ASSERT(lock != NULL);
 
@@ -379,7 +357,8 @@ void cond_wait(struct condition *cond, struct lock *lock) {
 	ASSERT(lock_held_by_current_thread (lock));
 
 	sema_init(&waiter.semaphore, 0);
-	list_push_back(&cond->waiters, &waiter.elem);
+//	list_push_back(&cond->waiters, &waiter.elem);
+	list_insert_ordered(&cond->waiters,  &waiter.elem, &has_bigger_priority, NULL);
 	lock_release(lock);
 	sema_down(&waiter.semaphore);
 	lock_acquire(lock);
@@ -399,8 +378,13 @@ void cond_signal(struct condition *cond, struct lock *lock UNUSED) {
 	ASSERT(lock_held_by_current_thread (lock));
 
 	if (!list_empty(&cond->waiters))
-		sema_up(&list_entry (list_pop_front (&cond->waiters),
-				struct semaphore_elem, elem)->semaphore);
+
+		list_sort(&cond->waiters, &has_bigger_priority, NULL);
+		struct thread * test_thread = list_entry (list_front(&cond->waiters), struct thread, elem);
+		printf("thread name : %s" , test_thread->name);
+		sema_up(&list_entry (list_pop_front (&cond->waiters),struct semaphore_elem, elem)->semaphore);
+
+
 }
 
 /* Wakes up all threads, if any, waiting on COND (protected by
@@ -416,3 +400,5 @@ void cond_broadcast(struct condition *cond, struct lock *lock) {
 	while (!list_empty(&cond->waiters))
 		cond_signal(cond, lock);
 }
+
+

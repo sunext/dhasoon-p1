@@ -92,6 +92,7 @@ struct thread
     int actual_priority;				/* Priority before donation.
     This must be returned back to priority variable after donation task is complete */
 
+
     struct lock *required_lock;			 /*Lock which is required by this thread
     (in case it is waiting for it to be released) */
 

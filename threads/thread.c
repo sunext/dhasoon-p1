@@ -175,6 +175,8 @@ static unsigned thread_ticks; /* # of timer ticks since last yield. */
 
 	 ASSERT(function != NULL);
 
+	 enum intr_level old_level = intr_disable();
+
 	 /* Allocate thread. */
 	 t = palloc_get_page(PAL_ZERO);
 	 if (t == NULL)
@@ -199,6 +201,8 @@ static unsigned thread_ticks; /* # of timer ticks since last yield. */
 	 sf->eip = switch_entry;
 	 sf->ebp = 0;
 
+	 intr_set_level(old_level);
+
 	 //printf("size of readyList BEFORE unblock is : %lu \n" , list_size(&ready_list));
 	 //printf("going to ready list--- : %s \n" , t->name);
 	 /* Add to run queue. */
@@ -206,7 +210,7 @@ static unsigned thread_ticks; /* # of timer ticks since last yield. */
 
 	 //printf("size of readyList AFTER unblock is : %lu \n" , list_size(&ready_list));
 
-	 enum intr_level old_level = intr_disable();
+	 old_level = intr_disable();
 	 check_thread_priority();
 	 intr_set_level(old_level);
 
@@ -353,6 +357,9 @@ static unsigned thread_ticks; /* # of timer ticks since last yield. */
 
  /* Sets the current thread's priority to NEW_PRIORITY. */
  void thread_set_priority(int new_priority) {
+
+	 enum intr_level old_level = intr_disable();
+
 	 thread_current()->priority = new_priority;
 
 	 /*
@@ -360,10 +367,28 @@ static unsigned thread_ticks; /* # of timer ticks since last yield. */
 	  *  the correct behavior is to immediately yield the processor.
 	  *  It is not acceptable to wait for the next timer interrupt.
 	  */
-	 check_thread_priority();
+	 //	 check_thread_priority();
 
+	 //save the priority to be updated call in its actual_priority
+
+	 thread_current ()->actual_priority = new_priority;
+
+	 if (!list_empty(&thread_current()->received_piorities)) {
+		 struct thread *thread_of_highest_priority =
+				 list_entry(list_front(&thread_current()->received_piorities),struct thread, recieved_priorities_elem);
+
+		 if (thread_of_highest_priority->priority > thread_current()->actual_priority){
+			 thread_current()->priority = thread_of_highest_priority->priority;
+		 }
+	 }
+
+
+
+	 check_thread_priority();
+	 intr_set_level(old_level);
 
  }
+
 
  /* Returns the current thread's priority. */
  int thread_get_priority(void) {
@@ -597,18 +622,22 @@ static unsigned thread_ticks; /* # of timer ticks since last yield. */
 	 return (ta->priority > tb->priority) ? true : false;
  }
 
+
  void check_thread_priority(void) {
-	 if (list_empty(&ready_list)) {
-		 return;
-	 }
 
-	 struct thread *next_available_thread = list_entry(list_front(&ready_list),
-			 struct thread, elem);
+	 if (!list_empty(&ready_list)) {
 
-	 if (thread_current()->priority < next_available_thread->priority
-			 || (++thread_ticks >= TIME_SLICE
-					 && thread_current()->priority == next_available_thread->priority)) {
-		 (intr_context()==1) ? intr_yield_on_return() : thread_yield();
+		 //explicitly sort the list
+		 list_sort(&ready_list, &has_bigger_priority,NULL);
+
+		 struct thread *next_available_thread =
+				 list_entry(list_front(&ready_list),struct thread, elem);
+
+		 if (thread_current()->priority < next_available_thread->priority
+				 || (++thread_ticks >= TIME_SLICE
+						 && thread_current()->priority == next_available_thread->priority)) {
+			 (intr_context()==1) ? intr_yield_on_return() : thread_yield();
+		 }
 	 }
  }
 
@@ -661,6 +690,7 @@ insert_into_ready_list(struct thread *t){
 	list_insert_ordered(&ready_list, &t->elem,
 				(list_less_func *) &has_bigger_priority, NULL);
 }*/
+
 
 
  /* Offset of `stack' member within `struct thread'.
