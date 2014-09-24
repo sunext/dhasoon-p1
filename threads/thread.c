@@ -606,42 +606,12 @@ static unsigned thread_ticks; /* # of timer ticks since last yield. */
 	 return tid;
  }
 
- bool is_thread_waking_now(const struct list_elem *a, const struct list_elem *b,
-		 void *aux UNUSED) {
-	 struct thread *ta = list_entry(a, struct thread, elem);
-	 struct thread *tb = list_entry(b, struct thread, elem);
 
-	 return (ta->wakeup_time < tb->wakeup_time) ? true : false;
- }
-
- bool has_bigger_priority(const struct list_elem *a, const struct list_elem *b,
-		 void *aux UNUSED) {
-	 struct thread *ta = list_entry(a, struct thread, elem);
-	 struct thread *tb = list_entry(b, struct thread, elem);
-
-	 return (ta->priority > tb->priority) ? true : false;
- }
-
-
- void check_thread_priority(void) {
-
-	 if (!list_empty(&ready_list)) {
-
-		 //explicitly sort the list
-		 list_sort(&ready_list, &has_bigger_priority,NULL);
-
-		 struct thread *next_available_thread =
-				 list_entry(list_front(&ready_list),struct thread, elem);
-
-		 if (thread_current()->priority < next_available_thread->priority
-				 || (++thread_ticks >= TIME_SLICE
-						 && thread_current()->priority == next_available_thread->priority)) {
-			 (intr_context()==1) ? intr_yield_on_return() : thread_yield();
-		 }
-	 }
- }
-
-
+/*
+ * called by timer_sleep() in timer.c
+ *
+ * puts the thread to sleep for exactly ticks period
+ */
  void thread_sleep(int64_t ticks) {
 	 ASSERT(intr_get_level () == INTR_ON);
 
@@ -652,10 +622,15 @@ static unsigned thread_ticks; /* # of timer ticks since last yield. */
 	 enum intr_level old_level = intr_disable();
 
 	 if (current_thread != idle_thread) {
+
+		 //calculate the sleeping period
 		 current_thread->wakeup_time = start + ticks;
+
+		 //insert the thread into sleep_list ordered by wake up time
 		 list_insert_ordered(&sleep_list, &thread_current()->elem,
 				 (list_less_func *) &is_thread_waking_now, NULL);
 
+		 //change the status to THREAD_SLEEPING
 		 current_thread->status = THREAD_SLEEPING;
 		 schedule();
 	 }
@@ -663,9 +638,15 @@ static unsigned thread_ticks; /* # of timer ticks since last yield. */
 	 intr_set_level(old_level);
  }
 
+
+ /*
+  * Method called to wake up any sleeping threads
+  */
  void wake_sleeping_threads() {
 
 	 if (list_empty(&sleep_list)) {
+
+		 //we have no thread to wake up , so return
 		 return;
 	 }
 
@@ -673,6 +654,7 @@ static unsigned thread_ticks; /* # of timer ticks since last yield. */
 	 struct list_elem *e = list_begin(&sleep_list);
 	 int64_t cur_ticks = timer_ticks();
 
+	 //loo[ the sleep list and check if any thread needs to be waken up now!
 	 while (e != list_end(&sleep_list)) {
 		 struct thread *t = list_entry(e, struct thread, elem);
 		 if (cur_ticks < t->wakeup_time) {
@@ -684,13 +666,63 @@ static unsigned thread_ticks; /* # of timer ticks since last yield. */
 	 }
  }
 
- /*void
-insert_into_ready_list(struct thread *t){
 
-	list_insert_ordered(&ready_list, &t->elem,
-				(list_less_func *) &has_bigger_priority, NULL);
-}*/
+ /*
+  * This method checks the ready list and does a yield if:
+  * 	- the current thread is of lower priority than the sorted ready list.
+  * 	- the current thread and the head of ready list have the same priority,
+  * 		but the time slice for current thread has expired.
+  */
+ void check_thread_priority(void) {
 
+ 	 if (!list_empty(&ready_list)) {
+
+ 		 //explicitly sort the list
+ 		 list_sort(&ready_list, &has_bigger_priority,NULL);
+
+ 		 //get the highest priority thread from ready list.
+ 		 //we use list_front as the list is already sorted by descending priority
+ 		 struct thread *next_available_thread =
+ 				 list_entry(list_front(&ready_list),struct thread, elem);
+
+ 		 //check priority of current thread and available ready thread
+ 		 //also checks the time slice expiration condition
+ 		 if (thread_current()->priority < next_available_thread->priority
+ 				 || (++thread_ticks >= TIME_SLICE
+ 						 && thread_current()->priority == next_available_thread->priority)) {
+ 			 (intr_context()==1) ? intr_yield_on_return() : thread_yield();
+ 		 }
+ 	 }
+  }
+
+
+
+ /*
+  * This is a comparator method that is passed to functions that need to :
+  * 	- insert threads into list in ascending order of wakeup_time
+  * 	- sort the list in ascending order of wakeup_time
+  */
+ bool is_thread_waking_now(const struct list_elem *a, const struct list_elem *b,
+		 void *aux UNUSED) {
+	 struct thread *ta = list_entry(a, struct thread, elem);
+	 struct thread *tb = list_entry(b, struct thread, elem);
+
+	 return (ta->wakeup_time < tb->wakeup_time) ? true : false;
+ }
+
+
+ /*
+  * This is a comparator method that is passed to functions that need to :
+  * 	- insert threads into list in descending order of priority
+  * 	- sort the list in descending order of priority
+  */
+ bool has_bigger_priority(const struct list_elem *a, const struct list_elem *b,
+		 void *aux UNUSED) {
+	 struct thread *ta = list_entry(a, struct thread, elem);
+	 struct thread *tb = list_entry(b, struct thread, elem);
+
+	 return (ta->priority > tb->priority) ? true : false;
+ }
 
 
  /* Offset of `stack' member within `struct thread'.

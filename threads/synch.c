@@ -77,6 +77,7 @@ void sema_down(struct semaphore *sema) {
 
 				current_thread = contention_lock->holder;
 			}
+			//get the next lock for priority donation
 			contention_lock = current_thread->required_lock;
 		}
 
@@ -126,6 +127,7 @@ void sema_up(struct semaphore *sema) {
 	if (!list_empty(&sema->waiters)) {
 
 		//TODO
+		//sort the list of sema waiters w.r.t to priority
 		list_sort(&sema->waiters, &has_bigger_priority,NULL);
 
 		thread_unblock(list_entry (list_pop_front (&sema->waiters),
@@ -261,8 +263,12 @@ void lock_release(struct lock *lock) {
 	struct list_elem *current_elem = list_begin(&current_thread->received_piorities);
 	struct list_elem *to_be_deleted_elem;
 
+	//get the current thread its original priority
 	current_thread->priority = current_thread->actual_priority;
 
+	//check if list of received_piorities is not empty
+	//if it is, then :
+	//	-	first delete all the ones that are waiting for the same lock
 	if (!list_empty(&current_thread->received_piorities)) {
 		while( current_elem != list_end(&current_thread->received_piorities)){
 			struct thread *loop_thread = list_entry(current_elem, struct thread, recieved_priorities_elem);
@@ -276,6 +282,10 @@ void lock_release(struct lock *lock) {
 			}
 		}
 
+		//again check if the received_piorities is empty again
+		//if not then :
+		// 	- the current thread should not have its actual priority yet
+		// 		hence, get the top-most thread and assign its priority to current thread.
 		if (!list_empty(&current_thread->received_piorities)) {
 			struct thread *head_of_received_piorities =
 					list_entry(list_front(&current_thread->received_piorities),struct thread, recieved_priorities_elem);
@@ -283,9 +293,7 @@ void lock_release(struct lock *lock) {
 			if (head_of_received_piorities->priority > current_thread->actual_priority){
 				current_thread->priority = head_of_received_piorities->priority;
 			}
-
 		}
-
 	}
 
 	lock->holder = NULL;

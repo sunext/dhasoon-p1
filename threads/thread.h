@@ -101,8 +101,8 @@ struct thread
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /* List element. */
 
-    struct list received_piorities;
-    struct list_elem recieved_priorities_elem;
+    struct list received_piorities;		/*list of threads from which the current thread received priorities */
+    struct list_elem recieved_priorities_elem;		/* List element*/
 
 #ifdef USERPROG
     /* Owned by userprog/process.c. */

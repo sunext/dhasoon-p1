@@ -105,26 +105,7 @@ timer_sleep (int64_t ticks)
 
 	thread_sleep(ticks);
 
-	/*ASSERT (intr_get_level () == INTR_ON);
-
-	int64_t start = timer_ticks ();
-	struct thread *current_thread = thread_current();
-
-	// disable the interrupt and set the wake up time for thread
-	enum intr_level old_level = intr_disable ();
-	current_thread->wakeup_time = start + ticks;
-
-	list_insert_ordered(&sleep_list, &thread_current()->elem,
-			(list_less_func *) &cmp_ticks, NULL);
-
-	thread_block();
-	intr_set_level(old_level);*/
-
-
-	/* THIS IS OLD-CODE REPLACED */
-	/*while (timer_elapsed (start) < ticks)
-		thread_yield ();
-	 */
+	thread_yield ();
 }
 
 /* Sleeps for approximately MS milliseconds.  Interrupts must be
