@@ -677,9 +677,6 @@ static unsigned thread_ticks; /* # of timer ticks since last yield. */
 
  	 if (!list_empty(&ready_list)) {
 
- 		 //explicitly sort the list
- 		 list_sort(&ready_list, &has_bigger_priority,NULL);
-
  		 //get the highest priority thread from ready list.
  		 //we use list_front as the list is already sorted by descending priority
  		 struct thread *next_available_thread =
